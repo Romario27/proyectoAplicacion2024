@@ -21,10 +21,15 @@ InputModel::InputModel(const std::string& address){
     
     
     for(int i=0; i<grafo.nodesVector.size(); i++){
-        std::vector<std::string> infoPrevlayer=grafo.nodesVector[i-1];
+        
+        std::vector<std::string> infoPrevlayer;
         std::vector<std::string> infolayer=grafo.nodesVector[i];
         std::vector<std::string> infoNextlayer;
-        
+
+        if(i>0){
+            infoPrevlayer=grafo.nodesVector[i-1];;
+        }
+
         if(i<grafo.nodesVector.size()-1){
             infoNextlayer=grafo.nodesVector[i+1];
         }
@@ -48,9 +53,9 @@ InputModel::InputModel(const std::string& address){
           9 = dilatations
           10 = dilation_rate*/
 
-        //std::cout << "debujer1"<< std::endl;
+        
         //-----------calcular num_dimension y size---------
-        int num_dimensionsInt;
+        int num_dimensionsInt=0;
         int dimensions[num_dimensionsInt];
         int size=1;
 

@@ -9,19 +9,25 @@
 #include "graph.cpp"
 #include <algorithm> 
 #include <cctype> 
+#include <any>
 
 using json = nlohmann::json;
 using namespace H5;
 
 
-std::vector<std::vector<std::string>> infolist;
+std::vector<std::vector<std::string>> infolist;                   //                                     bias       kernel
+std::unordered_map<std::string, std::vector<std::any>> weights;  // la idea es (conv2d, [[bias,kernel],[1,2,3...],[6,7,8,...]])
+std::vector<std::string> labelsWeight;
 
 // Función recursiva para listar los grupos y datasets
 void exploreGroup(const Group& group, const std::string& path = "/") {
     hsize_t num_objs = group.getNumObjs();  // Obtener el número de objetos en el grupo
     
     std::vector<std::string> lista;
+    //std::vector<float> tempDataWeight;
+    std::vector<std::any> dataWeight;
     bool save = false;
+    labelsWeight={};
 
     // obtiene el nombre de la capa
     size_t first_slash = path.find('/', 0);  // Primer '/'
@@ -56,6 +62,7 @@ void exploreGroup(const Group& group, const std::string& path = "/") {
             int num_dimensions = dataspace.getSimpleExtentNdims();
             hsize_t dims_out[num_dimensions];
             int ndims = dataspace.getSimpleExtentDims( dims_out, NULL);
+            
             
             
             if (num_dimensions == 1){
@@ -129,30 +136,45 @@ void exploreGroup(const Group& group, const std::string& path = "/") {
                 }
             }
 
-            /* // este podria servir para los pesos
+            // este podria servir para los pesos
             if (datatype.getClass() == H5T_FLOAT){
                 hsize_t num_elements = dataspace.getSimpleExtentNpoints();
                 std::vector<float> data(num_elements);  // Asumiendo que los datos son de tipo float
                 dataset.read(data.data(), datatype, dataspace);
+                //std::vector<float> vectAux=data;
 
                 int contador = 0;
+                std::cout << paramName << std::endl;
+                std::cout << "tamaño: " << dataWeight.size() << std::endl;
+                labelsWeight.push_back(paramName);
+                dataWeight.push_back(data);
 
+            
                 // Imprimir los datos
-                for (const auto& value : data) {
-                    contador++;
+                //for (const auto& value : dataWeight) {
+                  //  contador++;
                     //std::cout << "Valor: " << value << std::endl;
-                }
-            }*/
+                //}
+            }
+
         save = true;
         
         } else if (obj_type == H5G_TYPE) {
             std::cout << " -> Named datatype" << std::endl;
         }
     }
+    
     if (save){
         if (lista.size()<6){
-            infolist.push_back(lista);}
+            infolist.push_back(lista);
+            std::cout << "layer: " << layerName << std::endl;
+            dataWeight.insert(dataWeight.begin(),labelsWeight);
+            weights[layerName] = dataWeight;
+            std::cout << "layerSize: " << weights.size() << std::endl;
+        }
     }
+    
+
 }
 
 // Función para procesar cada capa y sus configuraciones
@@ -357,16 +379,45 @@ Graph generarGrafo(const std::string& address) {
         }
         
     }
+
+    for (const auto& pair : weights) {
+        std::cout << "+++++++++++++" << std::endl;
+        std::vector<std::any> values = pair.second;
+        std::cout<< values.size()<<std::endl;
+        std::cout<< pair.first<<std::endl;
+
+        if (!values.empty()) {
+            try {
+                std::vector<std::any> bias_kernel = std::any_cast<std::vector<std::any>>(values[0]);
+
+                // Extraer bias y kernel
+                std::string bias = std::any_cast<std::string>(bias_kernel[0]);
+                std::string kernel = std::any_cast<std::string>(bias_kernel[1]);
+
+                // Imprimir bias y kernel
+                std::cout << "  Bias: " << bias << std::endl;
+                std::cout << "  Kernel: " << kernel << std::endl;
+
+            } catch (const std::bad_any_cast& e) {
+                std::cerr << "Error: " << e.what() << std::endl;
+            }
+        }
+
+        //const std::vector<std::any> values = pair.second;
+        //std::vector<std::string> labels = std::any_cast<std::vector<std::string>>(values[0]);
+        //std::cout << weights.size()<< std::endl;
+        //std::cout << labels[0] << std::endl;
+    }
     //grafo.printGraph();
 
-    //Imprimir los resultados   
+    /*//Imprimir los resultados   
     std::cout<< "-------- Informacion de cada capa---------"<<std::endl; 
     for (const auto& layer : layers_info) {
         for (const auto& param : layer) {
             std::cout << param << std::endl;
         }
         std::cout << "-------------------------" << std::endl;
-    }
+    }*/
 
     
 
