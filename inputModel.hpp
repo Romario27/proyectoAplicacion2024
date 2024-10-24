@@ -62,4 +62,6 @@ private:
    *@param size dimensions number
    */
    std::vector<int> createArray(const std::string& data, int size);
+
+   void printlist (const std::string& label,const int list[], const int size);
 };

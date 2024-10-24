@@ -15,6 +15,9 @@ InputModel::InputModel(const std::string& address){
 
     std::string addresmodel = address;
     Graph grafo = generarGrafo(addresmodel);
+    std::vector<std::vector<std::vector<float>>> weights= getweights();
+    std::vector<std::vector<std::string>> labelsWeight= getlabelsWeight();
+    std::cout << "desde inputmodel: " << labelsWeight.size()<<std::endl;
     // hacer logica para dejar el grafo con la info requerida por layer
     
     //layers_ = {};
@@ -34,8 +37,6 @@ InputModel::InputModel(const std::string& address){
             infoNextlayer=grafo.nodesVector[i+1];
         }
         
-        
-        
         std::string labelLayer= infolayer[0];
         std::cout << "*******************" << std::endl;
         std::cout << labelLayer << std::endl;
@@ -52,7 +53,6 @@ InputModel::InputModel(const std::string& address){
           8 = padding
           9 = dilatations
           10 = dilation_rate*/
-
         
         //-----------calcular num_dimension y size---------
         int num_dimensionsInt=0;
@@ -62,6 +62,9 @@ InputModel::InputModel(const std::string& address){
         if (infolayer[4] != "null"){
             num_dimensionsInt = std::stoi(infolayer[4]);
             std::vector<int> dimensionsVec = createArray(infolayer[3],0);
+            if (labelLayer=="Add" || labelLayer=="Multiplier"){
+                dimensionsVec={dimensionsVec[dimensionsVec.size()-1]};
+            }
 
             for (int j=0; j<num_dimensionsInt; j++){
                 dimensions[j]=dimensionsVec[j];
@@ -71,8 +74,7 @@ InputModel::InputModel(const std::string& address){
         }else{
             size=0;}
 
-        std::cout << "size: " <<size << std::endl;
-        std::cout << "num_dimensions: " << num_dimensionsInt << std::endl;
+        
 
         int opcion=10;
         std::vector<int> dimensionsPrev;
@@ -141,6 +143,9 @@ InputModel::InputModel(const std::string& address){
                 padding[j]=paddingVec[j];
                 dilatations[j]=dilatationsVec[j];
             }
+            printlist("strides: ", strides, num_dimensionsInt);
+            printlist("padding: ", padding, num_dimensionsInt);
+            printlist("dilatations: ", dilatations, num_dimensionsInt);
             //layers_.push_back(std::make_shared<Layer<Conv2D>>());
             //layer = std::dynamic_pointer_cast<Layer<Conv2D>>(layers_[i]);
             //layer->type = Layers::CONV2D;
@@ -153,8 +158,15 @@ InputModel::InputModel(const std::string& address){
 
         }
         else if (labelLayer == "Add") {
-
             
+            if (infoPrevlayer[0]== "Multiplier"){
+                num_dimensionsInt=1;
+                dimensions[0]= std::stoi(infoPrevlayer[4]);
+                size= dimensions[0] * 4;
+
+            }
+            grafo.nodesVector[i][4] = std::to_string(dimensions[0]); //recordar que se esta seteando esta valor con la idea de pasar el num_dimension
+            std::cout <<"precedding: " << infoPrevlayer[0] << std::endl;
             // layers_.push_back(std::make_shared<Layer<Add>>());
             //layer = std::dynamic_pointer_cast<Layer<Add>>(layers_[i]);
             //layer->type = Layers::ADD;
@@ -179,6 +191,9 @@ InputModel::InputModel(const std::string& address){
                 padding[j]=paddingVec[j];
                 dilatations[j]=dilatationsVec[j];
             }
+            printlist("strides: ", strides, num_dimensionsInt);
+            printlist("padding: ", padding, num_dimensionsInt);
+            printlist("dilatations: ", dilatations, num_dimensionsInt);
             // layers_.push_back(std::make_shared<Layer<DepthConv2D>>());
             //layer = std::dynamic_pointer_cast<Layer<DepthConv2D>>(layers_[i]);
             //layer->type = Layers::DEPTHWISE_CONV2D;
@@ -202,6 +217,14 @@ InputModel::InputModel(const std::string& address){
             //                      .dimensions = dimensions};
         }
         else if (labelLayer == "Multiplier") {
+
+            num_dimensionsInt=1;
+            if (infoPrevlayer[0]== "Add"){
+                dimensions[0]= std::stoi(infoPrevlayer[4]);
+            }
+            size= dimensions[0] * 4;
+            grafo.nodesVector[i][4] = std::to_string(dimensions[0]);
+            
             // layers_.push_back(std::make_shared<Layer<Multiplier>>());
             //layer = std::dynamic_pointer_cast<Layer<Multiplier>>(layers_[i]);
             //layer->type = Layers::MULTIPLIER;
@@ -335,6 +358,9 @@ InputModel::InputModel(const std::string& address){
 
         //layer->input_size = input_size;
         //layer->output_size = output_size;
+        std::cout << "size: " <<size << std::endl;
+        std::cout << "num_dimensions: " << num_dimensionsInt << std::endl;
+        printlist("dimensions: ", dimensions, num_dimensionsInt);
         std::cout << "input_size = " << input_size << std::endl;
         std::cout << "output_size = " << output_size << std::endl;
         
@@ -381,6 +407,16 @@ std::vector<int> InputModel::createArray(const std::string& data, int size){
     }
     return final;
 } 
+
+void InputModel::printlist (const std::string& label,const int list[], const int size){
+    std::cout << label;
+    for (int i=0 ; i<size;i++){
+        if (i==size-1){
+            std::cout << list[i] ;
+        }else{std::cout << list[i]<< "x" ;}
+    }
+    std::cout << std::endl;
+}
 
 
 

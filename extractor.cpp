@@ -15,9 +15,14 @@ using json = nlohmann::json;
 using namespace H5;
 
 
-std::vector<std::vector<std::string>> infolist;                   //                                     bias       kernel
-std::unordered_map<std::string, std::vector<std::any>> weights;  // la idea es (conv2d, [[bias,kernel],[1,2,3...],[6,7,8,...]])
-std::vector<std::string> labelsWeight;
+std::vector<std::vector<std::string>> infolist; //datos del exploreGroup                                  bias       kernel
+//std::unordered_map<std::string, std::vector<std::any>> weights;  // la idea es (conv2d, [[bias,kernel],[1,2,3...],[6,7,8,...]])
+//std::vector<std::string> labelsWeight;
+
+std::vector<std::vector<std::vector<float>>> weights;
+std::vector<std::vector<std::string>> labelsWeight;
+std::vector<std::string> labels;
+
 
 // Función recursiva para listar los grupos y datasets
 void exploreGroup(const Group& group, const std::string& path = "/") {
@@ -25,9 +30,10 @@ void exploreGroup(const Group& group, const std::string& path = "/") {
     
     std::vector<std::string> lista;
     //std::vector<float> tempDataWeight;
-    std::vector<std::any> dataWeight;
+    std::vector<std::vector<float>> dataWeight;
+    
     bool save = false;
-    labelsWeight={};
+    //labelsWeight={};
 
     // obtiene el nombre de la capa
     size_t first_slash = path.find('/', 0);  // Primer '/'
@@ -144,9 +150,7 @@ void exploreGroup(const Group& group, const std::string& path = "/") {
                 //std::vector<float> vectAux=data;
 
                 int contador = 0;
-                std::cout << paramName << std::endl;
-                std::cout << "tamaño: " << dataWeight.size() << std::endl;
-                labelsWeight.push_back(paramName);
+                labels.push_back(paramName);
                 dataWeight.push_back(data);
 
             
@@ -167,10 +171,11 @@ void exploreGroup(const Group& group, const std::string& path = "/") {
     if (save){
         if (lista.size()<6){
             infolist.push_back(lista);
-            std::cout << "layer: " << layerName << std::endl;
-            dataWeight.insert(dataWeight.begin(),labelsWeight);
-            weights[layerName] = dataWeight;
-            std::cout << "layerSize: " << weights.size() << std::endl;
+            labelsWeight.push_back(labels);
+            weights.push_back(dataWeight);
+            labels={};
+            dataWeight={};
+
         }
     }
     
@@ -209,6 +214,9 @@ std::vector<std::vector<std::string>> parseLayers(const json& config) {
 
 std::vector<std::vector<std::string>> sincronizeVector(const std::vector<std::vector<std::string>>& info){
     std::vector<std::vector<std::string>> layers_info = info;
+    std::vector<std::vector<std::vector<float>>> tempoweights(weights.size());
+    std::vector<std::vector<std::string>> tempolabelweights(labelsWeight.size());
+
     //sincroniza los 2 resultados
     bool encontrado;
     // i lleva el indice del infolist
@@ -222,6 +230,8 @@ std::vector<std::vector<std::string>> sincronizeVector(const std::vector<std::ve
                 if (result){
                     //infolist[i].erase(infolist[i].begin());
                     layers_info[j].insert(layers_info[j].begin()+1, infolist[i].begin(), infolist[i].end());
+                    tempoweights[j]= weights[i];
+                    tempolabelweights[j]=labelsWeight[i];
                     k=layers_info[j].size();
                     encontrado=true;
                 }
@@ -231,6 +241,8 @@ std::vector<std::vector<std::string>> sincronizeVector(const std::vector<std::ve
             }
         }
     }
+    weights=tempoweights;
+    labelsWeight=tempolabelweights;
     return layers_info;
 }
 
@@ -255,7 +267,9 @@ std::vector<std::vector<std::string>> cleanVector(const std::vector<std::vector<
     int count=0;
     bool añadido=false;
     
+    
     for (int i=0; i<info.size();i++){
+        bool epsilonfalse=true;
         std::vector<std::string> aux;
         // j lleva la posicion de la lista de labels 
         for (int j=0; j<labels.size();j++){
@@ -268,6 +282,12 @@ std::vector<std::vector<std::string>> cleanVector(const std::vector<std::vector<
                 std::transform(toFind.begin(), toFind.end(), toFind.begin(), ::tolower);
     
                 bool result = str.find(toFind) != std::string::npos;
+                bool epsilon=false;
+                if (epsilonfalse){
+                    epsilon = str.find("epsilon") != std::string::npos;
+                    
+                }
+                
                 if (result){
                     std::string value= info[i][k];
                     size_t pos = value.find(':');
@@ -276,7 +296,7 @@ std::vector<std::vector<std::string>> cleanVector(const std::vector<std::vector<
                         value = value.substr(pos + 1);
                         // Quitar posibles espacios en blanco
                         value.erase(0, value.find_first_not_of(" \n\r\t"));
-        }
+                    }
                     if(count=!j){
                         int range= j-count;
                         for(int t=0;t<range;t++){
@@ -291,19 +311,90 @@ std::vector<std::vector<std::string>> cleanVector(const std::vector<std::vector<
                     k=info[i].size();
                     añadido=true;
                 }
+                if(epsilon){
+                    std::string value= info[i][k];
+                    size_t pos = value.find(':');
+                    if (pos != std::string::npos) {
+                        // Obtener el valor (parte después del ":")
+                        value = value.substr(pos + 1);
+                        // Quitar posibles espacios en blanco
+                        value.erase(0, value.find_first_not_of(" \n\r\t"));
+                        labelsWeight[i].push_back("epsilon");
+                        weights[i].push_back({std::stof(value)});
+                        epsilonfalse=false;
+                    }
+                }
             }
             if (!añadido){
                 aux.push_back("null");
             }
             añadido=false;
         }
-        std::cout<< aux.size()<< std::endl;
+        //std::cout<< aux.size()<< std::endl;
         infoSend.push_back(aux);
     }
     return infoSend;
 }
 
+std::vector<std::vector<std::vector<float>>> getweights(){
+    return weights;
+}
 
+std::vector<std::vector<std::string>> getlabelsWeight(){
+    return labelsWeight;
+}
+
+
+std::vector<std::vector<std::string>> mapping( std::vector<std::vector<std::string>>& info){
+    int contnewlayer=0;
+    for (int i=0; i<info.size();i++){
+        std::string labelname= info[i][0];
+        if (labelname == "Conv2D" || labelname == "Dense"){
+            if (weights[i-contnewlayer][0].size()>0){
+                std::vector<std::string> newlayer;
+                newlayer.push_back("Add");
+                newlayer.push_back("null");
+                newlayer.push_back(info[i][2]);
+                info[i][2]="null";
+                newlayer.push_back(info[i][3]);
+                newlayer.push_back("1");
+                newlayer.push_back("null");
+                newlayer.push_back("null");
+                newlayer.push_back("null");
+                newlayer.push_back("null");
+                newlayer.push_back("null");
+                newlayer.push_back("null");
+                info.insert(info.begin()+i+1, newlayer);
+                contnewlayer++;
+
+            }else{std::cout << "capa no se agrega ya que no continene bias" << std::endl;}
+        }else if(labelname=="BatchNormalization"){
+            std::vector<std::string> newlayerAdd;
+            std::vector<std::string> newlayerMult;
+            newlayerMult.push_back("Multiplier");
+            newlayerMult.push_back("null");
+            newlayerMult.push_back(info[i][2]);
+            info[i][2]="null";
+            newlayerMult.push_back(info[i][3]);
+            newlayerMult.push_back("null");
+            newlayerMult.push_back("null");
+            newlayerMult.push_back("null");
+            newlayerMult.push_back("null");
+            newlayerMult.push_back("null");
+            newlayerMult.push_back("null");
+            newlayerMult.push_back("null");
+
+            newlayerAdd=newlayerMult;
+            newlayerAdd[0]="Add";
+            info[i]= newlayerMult;
+            info.insert(info.begin()+i+1, newlayerAdd);
+            contnewlayer++;
+        }
+        std::cout << info[i][0] << std::endl;
+    }
+
+    return info;
+}
 
 
 Graph generarGrafo(const std::string& address) {
@@ -362,6 +453,11 @@ Graph generarGrafo(const std::string& address) {
 
     // limpiar vector
     layers_info= cleanVector(layers_info);
+
+   
+    // se realiza el mapeo
+    layers_info= mapping(layers_info);
+    std::cout << "tamaño de la red: " << layers_info.size()<< std::endl;
     
     // se crea el grafo
     Graph grafo;
@@ -380,34 +476,20 @@ Graph generarGrafo(const std::string& address) {
         
     }
 
-    for (const auto& pair : weights) {
-        std::cout << "+++++++++++++" << std::endl;
-        std::vector<std::any> values = pair.second;
-        std::cout<< values.size()<<std::endl;
-        std::cout<< pair.first<<std::endl;
-
-        if (!values.empty()) {
-            try {
-                std::vector<std::any> bias_kernel = std::any_cast<std::vector<std::any>>(values[0]);
-
-                // Extraer bias y kernel
-                std::string bias = std::any_cast<std::string>(bias_kernel[0]);
-                std::string kernel = std::any_cast<std::string>(bias_kernel[1]);
-
-                // Imprimir bias y kernel
-                std::cout << "  Bias: " << bias << std::endl;
-                std::cout << "  Kernel: " << kernel << std::endl;
-
-            } catch (const std::bad_any_cast& e) {
-                std::cerr << "Error: " << e.what() << std::endl;
+    for (int i=0; i<labelsWeight.size();i++){
+        if (labelsWeight[i].size()==0){
+            std::cout<< "-------- NULL---------"<<std::endl;
+        }else{
+            for (int j=0; j<labelsWeight[i].size(); j++){
+                std::cout<< "-------- label---------"<<std::endl; 
+                std::cout<< labelsWeight[i][j]<<std::endl;
             }
+             
         }
-
-        //const std::vector<std::any> values = pair.second;
-        //std::vector<std::string> labels = std::any_cast<std::vector<std::string>>(values[0]);
-        //std::cout << weights.size()<< std::endl;
-        //std::cout << labels[0] << std::endl;
     }
+
+
+
     //grafo.printGraph();
 
     /*//Imprimir los resultados   
